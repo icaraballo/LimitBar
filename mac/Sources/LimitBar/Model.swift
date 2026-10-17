@@ -16,10 +16,15 @@ struct Provider: Decodable, Identifiable {
 
     var ok: Bool { status == "ok" }
 
-    var name: String {
+    var name: String { Provider.name(id) }
+
+    static func name(_ id: String) -> String {
         ["claude": "Claude", "gemini": "Gemini", "antigravity": "Antigravity", "chatgpt": "ChatGPT",
          "grok": "Grok", "deepseek": "DeepSeek", "muse": "Muse"][id] ?? id.capitalized
     }
+
+    /// Pestañas fijas: salen aunque el recolector aún no traiga ese proveedor.
+    static let tabs = ["claude", "gemini", "antigravity"]
 }
 
 struct Window: Decodable, Identifiable {

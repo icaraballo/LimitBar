@@ -16,38 +16,53 @@ struct LimitBarApp: App {
     }
 }
 
+/// Icono fijo de la app (no un %: con varias IAs no se sabría de cuál es). Solo avisa si algo
+/// pasa del 90 % o si los datos están viejos.
 struct BarLabel: View {
     @ObservedObject var store: Store
 
     var body: some View {
-        let pct = store.snapshot?.worst?.usedPct
-        HStack(spacing: 3) {
-            Image(systemName: "gauge.with.dots.needle.33percent")
-            if let pct {
-                Text("\(Int(pct.rounded()))%" + (store.isStale ? " ⏸" : ""))
-            } else {
-                Text(store.snapshot == nil ? "?" : "✗")
-            }
-        }
+        let critical = (store.snapshot?.worst?.usedPct ?? 0) >= 90
+        Image(systemName: critical ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.67percent")
+            .opacity(store.isStale ? 0.5 : 1)
     }
 }
 
 struct MenuView: View {
     @EnvironmentObject var store: Store
+    @AppStorage("tab") private var tab = "claude"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let snap = store.snapshot {
-                ForEach(snap.providers) { ProviderSection(provider: $0, now: store.now) }
+            Picker("", selection: $tab) {
+                ForEach(tabs, id: \.self) { Text(Provider.name($0)).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            if let provider = store.snapshot?.providers.first(where: { $0.id == tab }) {
+                ProviderSection(provider: provider, now: store.now)
             } else {
-                Text("Sin datos todavía").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Provider.name(tab)).font(.headline)
+                    Text(store.snapshot == nil ? "Sin datos todavía" : "Sin conectar todavía")
+                        .foregroundStyle(.secondary)
+                }
             }
             Divider()
             Footer()
         }
         .padding(14)
-        .frame(width: 320)
+        .frame(width: 340)
         .onAppear { store.reload() }
+    }
+}
+
+extension MenuView {
+    /// Las fijas y, detrás, cualquier proveedor nuevo que traiga el JSON.
+    var tabs: [String] {
+        let extra = (store.snapshot?.providers.map(\.id) ?? []).filter { !Provider.tabs.contains($0) }
+        return Provider.tabs + extra
     }
 }
 

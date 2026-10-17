@@ -73,6 +73,32 @@ class ScanTest(unittest.TestCase):
         self.assertEqual([m.label for m in cost.models], ["Opus 5.5", "Haiku 4.5"])
         self.assertAlmostEqual(cost.priced_usd, 25.0, places=2)
 
+    def test_calendar_periods_and_history_retention(self):
+        # 2026-10-17 es sábado (semana natural desde lun 2026-10-12)
+        root = self._root(
+            line("claude-opus-5-5", "2026-10-17T10:00:00Z", "hoy", output_tokens=1_000_000),   # $20 hoy
+            line("claude-opus-5-5", "2026-10-13T10:00:00Z", "sem", output_tokens=1_000_000),   # $20 martes
+            line("claude-opus-5-5", "2026-10-03T10:00:00Z", "mes", output_tokens=1_000_000),   # $20 mes
+        )
+        with TemporaryDirectory() as tmp:
+            hist_file = Path(tmp) / "cost_daily.json"
+            # Simulamos un día de septiembre ya guardado en el histórico cuyos logs ya se borraron
+            hist_file.write_text(json.dumps({
+                "claude": {
+                    "2026-09-15": {
+                        "claude-opus-5-5": {"input": 0, "output": 1_000_000, "cw5m": 0, "cw1h": 0, "read": 0}
+                    }
+                }
+            }))
+            cost = usage_tokens.read_cost(7, NOW, root, history_file=hist_file)
+            by_id = {p.id: p for p in cost.periods}
+            self.assertEqual([p.id for p in cost.periods], ["day", "week", "month", "year"])
+            self.assertEqual([p.label for p in cost.periods], ["Hoy", "Esta semana", "Octubre", "2026"])
+            self.assertAlmostEqual(by_id["day"].priced_usd, 20.0, places=2)
+            self.assertAlmostEqual(by_id["week"].priced_usd, 40.0, places=2)
+            self.assertAlmostEqual(by_id["month"].priced_usd, 60.0, places=2)
+            self.assertAlmostEqual(by_id["year"].priced_usd, 80.0, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

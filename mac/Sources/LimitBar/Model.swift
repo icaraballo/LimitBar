@@ -48,11 +48,26 @@ struct Share: Decodable, Identifiable {
     let pct: Double
 }
 
+struct CostPeriod: Decodable, Identifiable {
+    let id: String               // "day", "week", "month", "year"
+    let label: String            // "Hoy", "Esta semana", "Octubre", "2026"
+    let pricedUsd: Double
+    let models: [ModelCost]
+}
+
 struct Cost: Decodable {
     let windowDays: Int
     let pricedUsd: Double
     let pricesRevised: String?
     let models: [ModelCost]
+    let periods: [CostPeriod]?
+
+    var hasAnyUsage: Bool {
+        if let periods, !periods.isEmpty {
+            return periods.contains { !$0.models.isEmpty }
+        }
+        return !models.isEmpty
+    }
 }
 
 struct ModelCost: Decodable, Identifiable {

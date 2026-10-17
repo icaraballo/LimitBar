@@ -49,13 +49,24 @@ class ModelCost:
 
 
 @dataclass
+class CostPeriod:
+    """Coste equivalente en un periodo natural (hoy, semana, mes, año)."""
+
+    id: str                      # "day", "week", "month", "year"
+    label: str                   # "Hoy", "Esta semana", "Octubre", "2026"
+    priced_usd: float
+    models: list[ModelCost] = field(default_factory=list)
+
+
+@dataclass
 class Cost:
-    """Coste equivalente del uso medible (hoy solo Claude Code), por modelo y en una ventana."""
+    """Coste equivalente del uso medible (Claude Code y Antigravity), por modelo y por periodo."""
 
     window_days: int
-    priced_usd: float            # suma de lo que sé valorar
+    priced_usd: float            # suma de lo que sé valorar (semana por defecto)
     models: list[ModelCost] = field(default_factory=list)
     prices_revised: str | None = None
+    periods: list[CostPeriod] = field(default_factory=list)
 
 
 @dataclass

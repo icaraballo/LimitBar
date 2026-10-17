@@ -14,6 +14,7 @@ import subprocess
 import urllib.error
 import urllib.request
 
+from dataclasses import asdict
 from collector.schema import Snapshot
 
 
@@ -63,9 +64,7 @@ def build_rows(snapshot: Snapshot) -> tuple[list[dict], list[dict]]:
             row["windows"] = [w.__dict__ for w in p.windows]
             row["breakdown"] = [s.__dict__ for s in p.breakdown]
             if p.cost is not None:
-                row["cost"] = {"window_days": p.cost.window_days, "priced_usd": p.cost.priced_usd,
-                               "prices_revised": p.cost.prices_revised,
-                               "models": [m.__dict__ for m in p.cost.models]}
+                row["cost"] = asdict(p.cost)
             row["updated_at"] = snapshot.collected_at
             history += [{
                 "collected_at": snapshot.collected_at,

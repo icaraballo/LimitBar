@@ -81,7 +81,7 @@ struct ProviderSection: View {
                 if let shares = provider.breakdown, !shares.isEmpty {
                     BreakdownView(shares: shares)
                 }
-                if let cost = provider.cost, !cost.models.isEmpty {
+                if let cost = provider.cost, cost.hasAnyUsage {
                     CostView(cost: cost)
                 }
             }
@@ -149,25 +149,49 @@ struct BreakdownView: View {
 
 struct CostView: View {
     let cost: Cost
+    @AppStorage("costPeriod") private var periodId = "week"
+
+    private var selected: CostPeriod? {
+        guard let periods = cost.periods, !periods.isEmpty else { return nil }
+        return periods.first(where: { $0.id == periodId }) ?? periods.first
+    }
+
+    private var activeModels: [ModelCost] { selected?.models ?? cost.models }
+    private var activePriced: Double { selected?.pricedUsd ?? cost.pricedUsd }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Coste equivalente · \(cost.windowDays) d").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Text(String(format: "$%.2f", cost.pricedUsd)).font(.caption).bold().monospacedDigit()
-            }
-            .help("Lo que habría costado por API el uso de Claude Code. Tengo tarifa plana; es solo referencia.")
-            ForEach(cost.models) { m in
-                HStack(spacing: 8) {
-                    Text(m.label).frame(width: 90, alignment: .leading)
-                    Text(String(format: "%.1f MTok", Double(m.totalTokens) / 1_000_000))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(m.costUsd.map { String(format: "$%.2f", $0) } ?? "sin precio")
-                        .monospacedDigit()
+            HStack(spacing: 6) {
+                Text("Coste equivalente").font(.caption).foregroundStyle(.secondary)
+                if let periods = cost.periods, !periods.isEmpty {
+                    Picker("", selection: $periodId) {
+                        ForEach(periods) { p in Text(p.label).tag(p.id) }
+                    }
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .labelsHidden()
+                    .fixedSize()
+                } else {
+                    Text("· \(cost.windowDays) d").font(.caption).foregroundStyle(.secondary)
                 }
-                .font(.caption)
+                Spacer()
+                Text(String(format: "$%.2f", activePriced)).font(.caption).bold().monospacedDigit()
+            }
+            .help("Lo que habría costado por API el uso local medible. Tengo tarifa plana; es solo referencia.")
+            if activeModels.isEmpty {
+                Text("Sin uso en este periodo").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(activeModels) { m in
+                    HStack(spacing: 8) {
+                        Text(m.label).frame(width: 90, alignment: .leading)
+                        Text(String(format: "%.1f MTok", Double(m.totalTokens) / 1_000_000))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(m.costUsd.map { String(format: "$%.2f", $0) } ?? "sin precio")
+                            .monospacedDigit()
+                    }
+                    .font(.caption)
+                }
             }
         }
         .padding(.top, 2)

@@ -28,7 +28,9 @@ La primera vez, macOS pedirá permiso para que `security` lea la entrada
    security add-generic-password -a limitbar -s limitbar-supabase-key -w   # la pide sin mostrarla
    ```
 
-Sin esas dos entradas el recolector funciona igual, pero no sube nada.
+Con la CLI de Supabase la clave se obtiene con
+`supabase projects api-keys --project-ref <ref> --reveal` (sin `--reveal` sale enmascarada y
+Supabase responde 401). Sin esas dos entradas el recolector funciona igual, pero no sube nada.
 
 Tablas: `latest_status` (una fila por proveedor; si un proveedor falla se conserva su última
 lectura buena) y `usage_history` (una fila por ventana y ronda). Las dos tienen RLS sin

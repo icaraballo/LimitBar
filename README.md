@@ -47,7 +47,20 @@ scripts/launchd.sh uninstall
 Log en `~/Library/Logs/LimitBar/collector.log`. Si el Mac duerme, la ronda pendiente se hace
 al despertar.
 
-## Barra de menú del Mac
+## App del Mac (LimitBar.app)
+
+App nativa en SwiftUI (`mac/`) que vive en la barra de menú, sin icono en el Dock. Se compila
+sin Xcode, con las Command Line Tools:
+
+```sh
+scripts/build_app.sh install   # compila, copia a /Applications y la abre
+```
+
+Lee `data/latest.json` cada 30 s (la ruta del repo va grabada en su Info.plist), así que no
+llama a ninguna API. «Actualizar ahora» lanza `scripts/collect.sh`. Tiene «Abrir al iniciar
+sesión» y «Salir» (⌘Q).
+
+## Barra de menú con SwiftBar (anterior)
 
 Con [SwiftBar](https://github.com/swiftbar/SwiftBar) (`brew install --cask swiftbar`):
 

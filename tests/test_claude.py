@@ -1,10 +1,13 @@
 import json
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from collector.main import collect
+from collector.providers import claude
 from collector.providers.base import Provider, ProviderError
-from collector.providers.claude import parse_breakdown, parse_usage, read_access_token
+from collector.providers.claude import (SessionExpired, parse_breakdown, parse_usage,
+                                        read_access_token)
 from collector.schema import ProviderResult
 
 FIXTURE = Path(__file__).parent / "fixtures" / "claude_usage.json"
@@ -61,6 +64,57 @@ class TokenTest(unittest.TestCase):
     def test_valid(self):
         blob = json.dumps({"claudeAiOauth": {"accessToken": "abc", "expiresAt": 5000}})
         self.assertEqual(read_access_token(blob, now_ms=1000), "abc")
+
+    def test_expired_is_session_expired(self):
+        blob = json.dumps({"claudeAiOauth": {"accessToken": "x", "expiresAt": 1000}})
+        with self.assertRaises(SessionExpired):
+            read_access_token(blob, now_ms=2000)
+
+
+class WakeTest(unittest.TestCase):
+    """Si el token caduca, se despierta a Claude Code una vez y se reintenta."""
+
+    def _run(self, tokens, wake_ok=True):
+        calls = {"wake": 0}
+
+        def fake_read(*_a, **_k):
+            value = tokens.pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        def fake_wake():
+            calls["wake"] += 1
+            return wake_ok
+
+        with mock.patch.object(claude, "read_access_token", side_effect=fake_read), \
+             mock.patch.object(claude, "wake_claude_code", side_effect=fake_wake), \
+             mock.patch.object(claude, "fetch_usage", side_effect=lambda t: {"token": t}):
+            return claude.ClaudeProvider._fetch_usage_with_wake(), calls["wake"]
+
+    def test_valid_token_does_not_wake(self):
+        data, wakes = self._run(["ok"])
+        self.assertEqual((data, wakes), ({"token": "ok"}, 0))
+
+    def test_expired_wakes_and_retries(self):
+        data, wakes = self._run([SessionExpired("caducado"), "nuevo"])
+        self.assertEqual((data, wakes), ({"token": "nuevo"}, 1))
+
+    def test_wake_fails_keeps_original_error(self):
+        with self.assertRaisesRegex(SessionExpired, "caducado"):
+            self._run([SessionExpired("caducado")], wake_ok=False)
+
+    def test_still_expired_after_wake_gives_up(self):
+        with self.assertRaises(SessionExpired):
+            self._run([SessionExpired("caducado"), SessionExpired("sigue")])
+
+    def test_other_errors_do_not_wake(self):
+        with self.assertRaisesRegex(ProviderError, "sin conexión"):
+            self._run([ProviderError("sin conexión")])
+
+    def test_no_claude_binary(self):
+        with mock.patch.object(claude, "CLAUDE_BIN_CANDIDATES", [Path("/no/existe/claude")]):
+            self.assertFalse(claude.wake_claude_code())
 
 
 class Boom(Provider):

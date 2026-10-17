@@ -12,12 +12,18 @@ De dónde sale el dato (no oficial, puede cambiar):
 
 Reglas: el token vive solo en memoria y es de solo lectura. Nunca se refresca ni se reescribe
 (eso podría cerrar la sesión de Claude Code).
+
+Si ha caducado (= no estoy usando Claude Code), se **despierta a Claude Code** con un mensaje
+mínimo (`claude -p ok --model haiku`, sin herramientas ni MCP, sin guardar sesión) para que sea
+él quien lo renueve, y se vuelve a leer. Es como abrir otra terminal con Claude Code: no se pisa
+con la sesión que tenga abierta. Coste: un mensaje de Haiku cada ~8 h de inactividad.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -32,6 +38,19 @@ BETA_HEADER = "oauth-2025-04-20"
 KEYCHAIN_SERVICE = "Claude Code-credentials"
 CREDENTIALS_FILE = Path.home() / ".claude" / ".credentials.json"
 RENEW_MSG = "Abre Claude Code para renovar la sesión"
+# launchd no carga el PATH de la terminal: se busca el binario en rutas conocidas.
+CLAUDE_BIN_CANDIDATES = [
+    Path.home() / ".local" / "bin" / "claude",
+    Path("/opt/homebrew/bin/claude"),
+    Path("/usr/local/bin/claude"),
+]
+WAKE_ARGS = ["-p", "ok", "--model", "haiku", "--tools", "", "--strict-mcp-config",
+             "--no-session-persistence"]
+WAKE_TIMEOUT_S = 60
+
+
+class SessionExpired(ProviderError):
+    """El token ha caducado o la API lo rechaza: se puede intentar despertar a Claude Code."""
 
 # clave en la respuesta → (id, etiqueta). El orden es el de salida.
 WINDOWS = [
@@ -79,8 +98,32 @@ def read_access_token(blob: str | None = None, now_ms: int | None = None) -> str
     expires_at = oauth.get("expiresAt")
     now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
     if isinstance(expires_at, (int, float)) and expires_at <= now_ms:
-        raise ProviderError(f"La sesión ha caducado. {RENEW_MSG}")
+        raise SessionExpired(f"La sesión ha caducado. {RENEW_MSG}")
     return token
+
+
+def _find_claude_bin() -> Path | None:
+    return next((p for p in CLAUDE_BIN_CANDIDATES if p.is_file()), None)
+
+
+def wake_claude_code() -> bool:
+    """Lanza un mensaje mínimo con Claude Code para que renueve él mismo su token.
+
+    Se ejecuta en un directorio temporal (fuera de mis proyectos), sin herramientas, sin MCP y
+    sin guardar la sesión. Devuelve True si Claude Code terminó bien.
+    """
+    claude_bin = _find_claude_bin()
+    if claude_bin is None:
+        return False
+    try:
+        out = subprocess.run(
+            [str(claude_bin), *WAKE_ARGS],
+            cwd=tempfile.gettempdir(), stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=WAKE_TIMEOUT_S,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return out.returncode == 0
 
 
 def fetch_usage(token: str) -> dict:
@@ -95,7 +138,7 @@ def fetch_usage(token: str) -> dict:
             return json.load(resp)
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            raise ProviderError(f"Token rechazado. {RENEW_MSG}") from None
+            raise SessionExpired(f"Token rechazado. {RENEW_MSG}") from None
         if e.code == 429:
             raise ProviderError("Demasiadas peticiones; se reintentará en la próxima ronda") from None
         raise ProviderError(f"Error HTTP {e.code} al leer el uso") from None
@@ -168,9 +211,18 @@ def parse_breakdown(data: dict) -> list[Share]:
 class ClaudeProvider(Provider):
     id = "claude"
 
+    @staticmethod
+    def _fetch_usage_with_wake() -> dict:
+        try:
+            return fetch_usage(read_access_token())
+        except SessionExpired:
+            if not wake_claude_code():
+                raise
+        # Claude Code ya ha renovado el token en el Llavero: se lee de nuevo (un solo reintento).
+        return fetch_usage(read_access_token())
+
     def fetch(self) -> ProviderResult:
-        token = read_access_token()
-        data = fetch_usage(token)
+        data = self._fetch_usage_with_wake()
         result = ProviderResult(id=self.id, windows=parse_usage(data), breakdown=parse_breakdown(data))
         try:    # el coste es local e independiente: si falla, no debe tumbar las ventanas
             from collector import usage_tokens

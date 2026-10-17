@@ -13,6 +13,7 @@ struct Provider: Decodable, Identifiable {
     let error: String?
     let windows: [Window]
     let breakdown: [Share]?
+    let cost: Cost?
 
     var ok: Bool { status == "ok" }
 
@@ -45,6 +46,26 @@ struct Share: Decodable, Identifiable {
     let id: String
     let label: String
     let pct: Double
+}
+
+struct Cost: Decodable {
+    let windowDays: Int
+    let pricedUsd: Double
+    let pricesRevised: String?
+    let models: [ModelCost]
+}
+
+struct ModelCost: Decodable, Identifiable {
+    let model: String
+    let label: String
+    let input: Int
+    let output: Int
+    let cacheWrite: Int
+    let cacheRead: Int
+    let costUsd: Double?
+
+    var id: String { model }
+    var totalTokens: Int { input + output + cacheWrite + cacheRead }
 }
 
 func parseISO(_ s: String) -> Date? {

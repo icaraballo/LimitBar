@@ -81,6 +81,9 @@ struct ProviderSection: View {
                 if let shares = provider.breakdown, !shares.isEmpty {
                     BreakdownView(shares: shares)
                 }
+                if let cost = provider.cost, !cost.models.isEmpty {
+                    CostView(cost: cost)
+                }
             }
         }
     }
@@ -132,6 +135,33 @@ struct BreakdownView: View {
                     Text(s.label).frame(width: 90, alignment: .leading)
                     ProgressView(value: s.pct, total: 100).tint(.secondary)
                     Text("\(Int(s.pct)) %").monospacedDigit().frame(width: 36, alignment: .trailing)
+                }
+                .font(.caption)
+            }
+        }
+        .padding(.top, 2)
+    }
+}
+
+struct CostView: View {
+    let cost: Cost
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Coste equivalente · \(cost.windowDays) d").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Text(String(format: "$%.2f", cost.pricedUsd)).font(.caption).bold().monospacedDigit()
+            }
+            .help("Lo que habría costado por API el uso de Claude Code. Tengo tarifa plana; es solo referencia.")
+            ForEach(cost.models) { m in
+                HStack(spacing: 8) {
+                    Text(m.label).frame(width: 90, alignment: .leading)
+                    Text(String(format: "%.1f MTok", Double(m.totalTokens) / 1_000_000))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(m.costUsd.map { String(format: "$%.2f", $0) } ?? "sin precio")
+                        .monospacedDigit()
                 }
                 .font(.caption)
             }

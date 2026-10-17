@@ -70,6 +70,12 @@ def render(snapshot: Snapshot) -> str:
         if p.breakdown:
             lines.append("    Semanal por producto: "
                          + " · ".join(f"{s.label} {s.pct:g} %" for s in p.breakdown))
+        if p.cost is not None and p.cost.models:
+            lines.append(f"    Coste equivalente ({p.cost.window_days} d): ${p.cost.priced_usd:.2f}")
+            for m in p.cost.models[:6]:
+                price = f"${m.cost_usd:.2f}" if m.cost_usd is not None else "sin precio"
+                toks = (m.input + m.output + m.cache_write + m.cache_read) / 1_000_000
+                lines.append(f"      {m.label:<12} {price:>8}  ({toks:.1f} MTok)")
     return "\n".join(lines)
 
 

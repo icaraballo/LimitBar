@@ -171,4 +171,10 @@ class ClaudeProvider(Provider):
     def fetch(self) -> ProviderResult:
         token = read_access_token()
         data = fetch_usage(token)
-        return ProviderResult(id=self.id, windows=parse_usage(data), breakdown=parse_breakdown(data))
+        result = ProviderResult(id=self.id, windows=parse_usage(data), breakdown=parse_breakdown(data))
+        try:    # el coste es local e independiente: si falla, no debe tumbar las ventanas
+            from collector import usage_tokens
+            result.cost = usage_tokens.read_cost()
+        except Exception:   # noqa: BLE001
+            pass
+        return result

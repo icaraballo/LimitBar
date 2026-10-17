@@ -36,12 +36,36 @@ class Share:
 
 
 @dataclass
+class ModelCost:
+    """Tokens consumidos por un modelo y su coste equivalente en API (None si no hay precio)."""
+
+    model: str
+    label: str
+    input: int
+    output: int
+    cache_write: int
+    cache_read: int
+    cost_usd: float | None
+
+
+@dataclass
+class Cost:
+    """Coste equivalente del uso medible (hoy solo Claude Code), por modelo y en una ventana."""
+
+    window_days: int
+    priced_usd: float            # suma de lo que sé valorar
+    models: list[ModelCost] = field(default_factory=list)
+    prices_revised: str | None = None
+
+
+@dataclass
 class ProviderResult:
     id: str
     status: str = "ok"           # "ok" | "error"
     error: str | None = None
     windows: list[Window] = field(default_factory=list)
     breakdown: list[Share] = field(default_factory=list)   # reparto del uso, si el proveedor lo da
+    cost: Cost | None = None                               # coste equivalente (tokens medibles)
 
     @classmethod
     def failed(cls, provider_id: str, message: str) -> "ProviderResult":

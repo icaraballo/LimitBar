@@ -11,7 +11,7 @@ Requiere Python 3.10+ y sin dependencias externas. Cada IA necesita su sesión:
 - **Claude**: haber iniciado sesión en Claude Code.
 - **Gemini**: Google Chrome y, la primera vez (y cuando caduque la cookie de Google, cada varias
   semanas), `python3 -m collector.providers.gemini --login`: abre un Chrome con un perfil propio
-  de LimitBar (`data/chrome-gemini/`, fuera de git) para iniciar sesión; después se cierra con ⌘Q.
+  de LimitBar (`~/Library/Application Support/LimitBar/chrome-gemini/`, fuera del repo) para iniciar sesión; después se cierra con ⌘Q.
 - **Antigravity**: tenerlo instalado con sesión iniciada (`agy`). No hace falta que esté abierto.
 
 ```sh

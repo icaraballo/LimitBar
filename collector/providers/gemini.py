@@ -5,7 +5,8 @@ De dónde sale el dato:
   uso), que internamente consulta `assistant.mobile.robin.RobinService/GetUsageInfo` y pinta las
   dos ventanas (`GXU_FIVE_HOURLY` = 5 h y `GXU_WEEKLY` = semanal) más los créditos de IA si existen.
 - Como `Gemini.app` cifra su sesión con Tink y macOS bloquea leer el perfil principal de Chrome,
-  usamos un perfil ligero propio en `data/chrome-gemini` con `--headless=new` y DevTools local
+  usamos un perfil ligero propio en `~/Library/Application Support/LimitBar/chrome-gemini`
+  (fuera del repo: lleva la sesión de Google y no debe ir en ninguna carpeta que se sincronice) con `--headless=new` y DevTools local
   (sin dependencias externas ni abrir ventanas, y cerrando el proceso en cuanto aparece el %).
 
 Primera vez (y cada varias semanas si caduca la cookie de Google):
@@ -37,7 +38,7 @@ from collector.schema import ProviderResult, Window
 
 USAGE_URL = "https://gemini.google.com/usage"
 CHROME_BIN = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-PROFILE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "chrome-gemini"
+PROFILE_DIR = Path.home() / "Library" / "Application Support" / "LimitBar" / "chrome-gemini"
 LOGIN_CMD = "python3 -m collector.providers.gemini --login"
 
 _TAG_RE = re.compile(r"<[^>]+>")

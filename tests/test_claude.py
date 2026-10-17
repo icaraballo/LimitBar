@@ -16,10 +16,14 @@ FIXTURE = Path(__file__).parent / "fixtures" / "claude_usage.json"
 class ParseUsageTest(unittest.TestCase):
     def test_fixture(self):
         windows = parse_usage(json.loads(FIXTURE.read_text()))
-        self.assertEqual([w.id for w in windows], ["5h", "7d", "7d_sonnet", "cloud_credits"])
+        self.assertEqual([w.id for w in windows], ["5h", "7d", "7d_sonnet"])
         self.assertEqual(windows[0].used_pct, 42.0)
         self.assertEqual(windows[0].resets_at, "2026-10-17T19:00:00Z")
         self.assertEqual(windows[1].used_pct, 18.4)
+
+    def test_cloud_credits_are_ignored(self):
+        windows = parse_usage(json.loads(FIXTURE.read_text()))
+        self.assertFalse(any(w.kind == "credit" for w in windows))
 
     def test_unknown_model_window_is_kept(self):
         data = json.loads(FIXTURE.read_text())
@@ -28,11 +32,13 @@ class ParseUsageTest(unittest.TestCase):
         data["extra_usage"] = {"is_enabled": False, "utilization": None}
         fable = [w for w in parse_usage(data) if w.id == "7d_fable"][0]
         self.assertEqual((fable.id, fable.label, fable.used_pct), ("7d_fable", "Semanal · Fable", 61.0))
-        self.assertEqual(len(parse_usage(data)), 5)
+        self.assertEqual(len(parse_usage(data)), 4)
 
     def test_dollar_credit(self):
-        credit = parse_usage(json.loads(FIXTURE.read_text()))[-1]
-        self.assertEqual((credit.label, credit.kind), ("Créditos nube", "credit"))
+        data = json.loads(FIXTURE.read_text())
+        data["kiwi_parachute"] = data["iguana_necktie"]     # un crédito en dinero nuevo sí sale
+        credit = parse_usage(data)[-1]
+        self.assertEqual((credit.id, credit.kind), ("kiwi_parachute", "credit"))
         self.assertEqual((credit.used, credit.limit, credit.currency), (25.0, 100.0, "USD"))
         self.assertEqual(credit.resets_at, "2026-11-05T07:59:00Z")
 

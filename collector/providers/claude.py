@@ -62,8 +62,10 @@ WINDOWS = [
 # Las dos principales salen siempre (aunque vengan vacías); las de modelo, solo si hay dato.
 REQUIRED = {"five_hour", "seven_day"}
 # Nombres en clave ya identificados (comparando con claude.ai → Ajustes → Uso).
-CODENAMES = {
-    "iguana_necktie": ("cloud_credits", "Créditos nube"),   # «Créditos de sesión en la nube»
+CODENAMES: dict[str, tuple[str, str]] = {}
+# Claves identificadas que NO quiero ver (ni en la app ni en Supabase).
+IGNORED = {
+    "iguana_necktie",   # «Créditos de sesión en la nube»: no los uso (quitado el 17-10)
 }
 BREAKDOWN_LABELS = {"claude_code": "Claude Code", "chat": "Chats", "cowork": "Cowork",
                     "other": "Otros"}
@@ -160,7 +162,7 @@ def _unknown_windows(data: dict) -> list[tuple[str, str, str]]:
     known = {key for key, _, _ in WINDOWS}
     out = []
     for key, raw in data.items():
-        if key in known or not isinstance(raw, dict) or raw.get("utilization") is None:
+        if key in known or key in IGNORED or not isinstance(raw, dict) or raw.get("utilization") is None:
             continue
         if key in CODENAMES:
             out.append((key, *CODENAMES[key]))

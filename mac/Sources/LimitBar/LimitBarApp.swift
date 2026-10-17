@@ -1,5 +1,5 @@
 // LimitBar.app: vive en la barra de menú (sin icono en el Dock). Al abrirla aparece arriba;
-// «Salir» la cierra. Diseño provisional: el bueno sale de claude.ai.
+// «Salir» la cierra. Aspecto (pestañas, temas) en Theme.swift.
 import SwiftUI
 
 @main
@@ -34,11 +34,7 @@ struct MenuView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("", selection: $tab) {
-                ForEach(tabs, id: \.self) { Text(Provider.name($0)).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            ProviderTabs(tabs: tabs, selection: $tab)
 
             if let provider = store.snapshot?.providers.first(where: { $0.id == tab }) {
                 ProviderSection(provider: provider, now: store.now)
@@ -54,6 +50,7 @@ struct MenuView: View {
         }
         .padding(14)
         .frame(width: 340)
+        .background(PopoverBackground())
         .onAppear { store.reload() }
     }
 }
@@ -102,8 +99,7 @@ struct WindowRow: View {
             }
             .font(.callout)
             if let pct = window.usedPct {
-                ProgressView(value: min(pct, 100), total: 100)
-                    .tint(window.isCredit ? .green : Format.color(pct))
+                Bar(value: pct, tint: window.isCredit ? .green : Format.color(pct))
             }
             if let date = window.resetsDate {
                 Text(detail(date)).font(.caption).foregroundStyle(.secondary)
@@ -137,7 +133,7 @@ struct BreakdownView: View {
             ForEach(shares) { s in
                 HStack(spacing: 8) {
                     Text(s.label).frame(width: 90, alignment: .leading)
-                    ProgressView(value: s.pct, total: 100).tint(.secondary)
+                    Bar(value: s.pct, tint: .secondary, height: 4)
                     Text("\(Int(s.pct)) %").monospacedDigit().frame(width: 36, alignment: .trailing)
                 }
                 .font(.caption)
@@ -200,6 +196,7 @@ struct CostView: View {
 
 struct Footer: View {
     @EnvironmentObject var store: Store
+    @AppStorage("appearance") private var appearance = Appearance.auto
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -229,9 +226,25 @@ struct Footer: View {
                 .toggleStyle(.checkbox)
                 .font(.caption)
                 Spacer()
+                Picker("", selection: $appearance) {
+                    ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .labelsHidden()
+                .fixedSize()
+                .help("Tema")
                 Button("Salir") { NSApplication.shared.terminate(nil) }
                     .keyboardShortcut("q")
             }
         }
+        .onAppear { apply(appearance) }
+        .onChange(of: appearance) { _, new in apply(new) }
+    }
+
+    /// En una ventana de MenuBarExtra, .preferredColorScheme(nil) no vuelve al modo del
+    /// sistema; con NSApp.appearance sí.
+    private func apply(_ a: Appearance) {
+        NSApp.appearance = a.scheme.map { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua)! }
     }
 }

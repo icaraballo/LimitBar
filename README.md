@@ -47,6 +47,20 @@ scripts/launchd.sh uninstall
 Log en `~/Library/Logs/LimitBar/collector.log`. Si el Mac duerme, la ronda pendiente se hace
 al despertar.
 
+## Barra de menú del Mac
+
+Con [SwiftBar](https://github.com/swiftbar/SwiftBar) (`brew install --cask swiftbar`):
+
+```sh
+defaults write com.ameba.SwiftBar PluginDirectory -string "$PWD/menubar/swiftbar"
+open -a SwiftBar
+```
+
+El plugin (`menubar/swiftbar/limitbar.1m.py`) relee `data/latest.json` cada minuto; no llama a
+ninguna API. Arriba enseña la ventana más gastada de todas (ámbar ≥ 70 %, rojo ≥ 90 %, ⏸ si los
+datos tienen más de 45 min). La lógica está en `menubar/render.py` y recorre cualquier
+proveedor y ventana del JSON, así que los nuevos aparecen solos.
+
 ## Cómo funciona
 
 - `collector/schema.py`: el formato JSON v0 (el contrato con el móvil).

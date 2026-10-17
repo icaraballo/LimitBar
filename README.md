@@ -9,12 +9,30 @@ propio; después irá a Supabase y a un widget de Android.
 Requiere Python 3.10+ y haber iniciado sesión en Claude Code. Sin dependencias externas.
 
 ```sh
-python3 -m collector.main     # imprime el uso y escribe data/latest.json
-python3 -m unittest           # tests
+python3 -m collector.main              # imprime el uso, escribe data/latest.json y sube a Supabase
+python3 -m collector.main --no-upload  # solo local
+python3 -m unittest                    # tests
 ```
 
 La primera vez, macOS pedirá permiso para que `security` lea la entrada
 «Claude Code-credentials» del Llavero.
+
+## Supabase
+
+1. Crea un proyecto en [supabase.com](https://supabase.com) y ejecuta
+   `supabase/migrations/001_tablas.sql` en el SQL Editor.
+2. Guarda la URL del proyecto y la **clave secreta** (Project Settings → API Keys) en el Llavero:
+
+   ```sh
+   security add-generic-password -a limitbar -s limitbar-supabase-url -w 'https://xxxx.supabase.co'
+   security add-generic-password -a limitbar -s limitbar-supabase-key -w   # la pide sin mostrarla
+   ```
+
+Sin esas dos entradas el recolector funciona igual, pero no sube nada.
+
+Tablas: `latest_status` (una fila por proveedor; si un proveedor falla se conserva su última
+lectura buena) y `usage_history` (una fila por ventana y ronda). Las dos tienen RLS sin
+políticas: con la clave pública no se puede leer ni escribir nada.
 
 ## Cómo funciona
 
@@ -26,5 +44,5 @@ La primera vez, macOS pedirá permiso para que `security` lea la entrada
 
 ## Estado
 
-v0: Claude (ventanas de 5 h, semanal y semanales por modelo). Falta: ejecución automática,
-Supabase, widget y el resto de proveedores.
+v0: Claude (ventanas de 5 h, semanal y semanales por modelo) y subida a Supabase. Falta:
+ejecución automática, widget y el resto de proveedores.

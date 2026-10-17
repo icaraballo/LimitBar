@@ -1,18 +1,22 @@
-"""Ejecuta todos los proveedores, enseña el resultado y lo guarda en data/latest.json.
+"""Ejecuta todos los proveedores, enseña el resultado, lo guarda en data/latest.json y lo
+sube a Supabase si está configurado.
 
-Uso: python3 -m collector.main
+Uso: python3 -m collector.main [--no-upload]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import socket
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from collector.providers.base import Provider, ProviderError
 from collector.providers.claude import ClaudeProvider
 from collector.schema import ProviderResult, Snapshot, utc_now_iso
+from collector.upload import UploadError, load_config, upload
 
 PROVIDERS: list[Provider] = [ClaudeProvider()]
 OUTPUT = Path(__file__).resolve().parent.parent / "data" / "latest.json"
@@ -61,13 +65,31 @@ def render(snapshot: Snapshot) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Recolector de LimitBar")
+    parser.add_argument("--no-upload", action="store_true", help="no subir a Supabase")
+    args = parser.parse_args()
+
     snapshot = collect()
     print(render(snapshot))
     OUTPUT.parent.mkdir(exist_ok=True)
     OUTPUT.write_text(json.dumps(snapshot.to_dict(), ensure_ascii=False, indent=2) + "\n")
     print(f"\nGuardado en {OUTPUT.relative_to(OUTPUT.parent.parent)}")
 
+    if args.no_upload:
+        return 0
+    config = load_config()
+    if config is None:
+        print("Supabase sin configurar: no se sube (ver README)")
+        return 0
+    try:
+        n = upload(snapshot, config)
+    except UploadError as e:
+        print(f"✗ {e}")
+        return 1
+    print(f"Subido a Supabase ({n} filas de histórico)")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,15 +1,15 @@
-"""Lector de Antigravity: % usado por familia de modelo y coste equivalente en tokens locales.
+"""Lector de Antigravity: % usado por grupo de modelos (5 h y semanal) y coste en tokens locales.
 
 De dónde sale el dato:
 - Antigravity expone en local el RPC Connect/JSON
-  `POST /exa.language_server_pb.LanguageServerService/GetUserStatus` con la cabecera
-  `x-codeium-csrf-token`.
+  `POST /exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary` con la cabecera
+  `x-codeium-csrf-token` (que por dentro consulta `retrieveUserQuotaSummary` con su sesión OAuth).
 - Si Antigravity o la extensión de VS Code están abiertas, se reutiliza el `language_server` o
-  `agy --hub` que ya esté corriendo (~10 ms).
+  `agy --hub` que ya esté corriendo (~150 ms con `forceRefresh: true`).
 - Si está todo cerrado, se arranca temporalmente `~/.gemini/bin/agy --hub` en un puerto libre
-  (~0,6 s): el propio binario oficial refresca en memoria el token del Llavero (`svce="gemini"`,
-  `acct="antigravity"`) sin tocar ni reescribir nada desde Python, devuelve `GetUserStatus` y se
-  cierra al terminar.
+  (~2 s): el propio binario oficial refresca en memoria el token del Llavero (`svce="gemini"`,
+  `acct="antigravity"`) sin tocar ni reescribir nada desde Python, devuelve el resumen de cuota y
+  se cierra al terminar.
 - Los tokens locales salen de `~/.gemini/antigravity*/brain/*/.system_generated/logs/transcript.jsonl`.
 """
 
@@ -25,29 +25,28 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from collector.providers.base import Provider, ProviderError
 from collector.schema import ProviderResult, Window
 
-RPC_PATH = "/exa.language_server_pb.LanguageServerService/GetUserStatus"
+RPC_PATH = "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary"
 AGY_CANDIDATES = (
     Path.home() / ".gemini" / "bin" / "agy",
     Path.home() / ".local" / "bin" / "agy",
     Path("/Applications/Antigravity.app/Contents/Resources/bin/language_server"),
 )
 
-# Familias conocidas: etiqueta sin nivel de esfuerzo → (window_id, nombre). Fijan el orden de arriba.
-# Los ids no llevan el periodo: la API no lo da y se deduce de la hora de reset (ver _period).
-KNOWN_FAMILIES: list[tuple[str, str, str]] = [
-    ("gemini 3.8 flash", "flash_3_8", "Flash 3.8"),
-    ("gemini 4 argon", "argon_4", "Argon 4"),
-    ("claude opus 5.5", "opus_5_5", "Claude Opus 5.5"),
-    ("claude sonnet 5.5", "sonnet_5_5", "Claude Sonnet 5.5"),
-    ("gpt-oss 120b", "gpt_oss_120b", "GPT-OSS 120B"),
+# Cubos conocidos de RetrieveUserQuotaSummary: bucketId → (window_id, etiqueta).
+# En cada grupo va primero la ventana de 5 h y luego la semanal, igual que en Claude y Gemini.
+KNOWN_BUCKETS: list[tuple[str, str, str]] = [
+    ("gemini-5h", "gemini_5h", "Gemini · 5 h"),
+    ("gemini-weekly", "gemini_7d", "Gemini · semanal"),
+    ("3p-5h", "claude_5h", "Claude · 5 h"),
+    ("3p-weekly", "claude_7d", "Claude · semanal"),
+    ("gemini-argon-wtu-weekly", "argon_4", "Argon 4 · semanal"),
 ]
-_TIER_SUFFIX = re.compile(r"\s*\((?:Low|Medium|High|Extra Low)\)$", re.IGNORECASE)
 
 
 def _to_utc_iso(value: str | None) -> str | None:
@@ -60,59 +59,64 @@ def _to_utc_iso(value: str | None) -> str | None:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _period(reset_iso: str | None, now: datetime) -> str | None:
-    """«5 h» o «semanal» según lo lejos que quede el reset (la API solo da la hora)."""
-    if not reset_iso:
-        return None
-    try:
-        reset = datetime.fromisoformat(reset_iso.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return "semanal" if reset - now > timedelta(hours=24) else "5 h"
+def _fallback_label(group_name: str, bucket: dict) -> str:
+    base = (group_name or bucket.get("displayName") or bucket.get("bucketId") or "Cuota").strip()
+    win = bucket.get("window")
+    if win == "5h":
+        return f"{base} · 5 h"
+    if win == "weekly":
+        return f"{base} · semanal"
+    return f"{base} · {win}" if win else base
 
 
-def parse_usage(data: dict, now: datetime | None = None) -> list[Window]:
-    """Traduce `GetUserStatus` a una ventana por familia de modelo (sin repetir Low/Medium/High)."""
-    now = now or datetime.now(timezone.utc)
-    configs = (
-        (data.get("userStatus") or {})
-        .get("cascadeModelConfigData", {})
-        .get("clientModelConfigs")
-        or []
-    )
-    by_family: dict[str, tuple[str, dict]] = {}
-    for cfg in configs:
-        if not isinstance(cfg, dict) or not cfg.get("label"):
+def parse_usage(data: dict) -> list[Window]:
+    """Traduce `RetrieveUserQuotaSummary` a las ventanas de 5 h y semanal de cada grupo.
+
+    Mientras un cubo no se ha empezado a usar (`remainingFraction == 1`), Antigravity no tiene
+    reseteo activo (la API devuelve `now + 5h` / `now + 7d` rodante y omite `description`), así
+    que `resets_at` queda a `None` hasta que empiece el consumo.
+    """
+    groups = ((data.get("response") or data).get("groups")) or []
+    by_bucket: dict[str, tuple[str, dict]] = {}
+    for grp in groups:
+        if not isinstance(grp, dict):
             continue
-        base = _TIER_SUFFIX.sub("", cfg["label"].strip())
-        quota = cfg.get("quotaInfo") if isinstance(cfg.get("quotaInfo"), dict) else {}
-        if base.lower() not in by_family or quota:
-            by_family[base.lower()] = (base, quota)
+        g_name = str(grp.get("displayName") or "")
+        for b in grp.get("buckets") or []:
+            if isinstance(b, dict) and b.get("bucketId"):
+                by_bucket[str(b["bucketId"])] = (g_name, b)
 
-    known = {fam: (wid, name) for fam, wid, name in KNOWN_FAMILIES}
-    order = [fam for fam, _, _ in KNOWN_FAMILIES if fam in by_family]
-    order += [fam for fam in by_family if fam not in known]
+    known = {bid: (wid, label) for bid, wid, label in KNOWN_BUCKETS}
+    order = [bid for bid, _, _ in KNOWN_BUCKETS if bid in by_bucket]
+    order += [bid for bid in by_bucket if bid not in known]
 
     windows: list[Window] = []
-    for fam in order:
-        base, quota = by_family[fam]
-        wid, name = known.get(fam, (re.sub(r"[^a-z0-9]+", "_", fam).strip("_"), base))
-        rem = quota.get("remainingFraction")
-        reset_iso = _to_utc_iso(quota.get("resetTime"))
+    for bid in order:
+        g_name, bucket = by_bucket[bid]
+        wid, label = known.get(
+            bid,
+            (re.sub(r"[^a-z0-9]+", "_", bid.lower()).strip("_"), _fallback_label(g_name, bucket)),
+        )
+        rem = bucket.get("remainingFraction")
+        raw_reset = _to_utc_iso(bucket.get("resetTime"))
         if isinstance(rem, (int, float)):
             used_pct = round(max(0.0, min(100.0, (1.0 - float(rem)) * 100.0)), 1)
-        elif reset_iso is not None:
+            started = float(rem) < 1.0
+        elif raw_reset is not None:
             # En Protobuf3 JSON, remainingFraction=0.0 se omite cuando el cupo está al 100 % usado.
             used_pct = 100.0
+            started = True
         else:
             used_pct = None
-        period = _period(reset_iso, now)
-        label = f"{name} · {period}" if period else name
-        windows.append(Window(id=wid, label=label, used_pct=used_pct, resets_at=reset_iso))
+            started = False
+        resets_at = raw_reset if started else None
+        windows.append(Window(id=wid, label=label, used_pct=used_pct, resets_at=resets_at))
     return windows
 
 
-def _call_get_user_status(port: int, csrf: str, https: bool = False, timeout: float = 3.0) -> dict:
+def _call_quota_summary(
+    port: int, csrf: str, https: bool = False, force_refresh: bool = True, timeout: float = 3.0
+) -> dict:
     scheme = "https" if https else "http"
     url = f"{scheme}://127.0.0.1:{port}{RPC_PATH}"
     headers = {
@@ -120,9 +124,7 @@ def _call_get_user_status(port: int, csrf: str, https: bool = False, timeout: fl
         "Connect-Protocol-Version": "1",
         "x-codeium-csrf-token": csrf,
     }
-    body = json.dumps({
-        "metadata": {"ideName": "antigravity", "extensionName": "antigravity", "locale": "es"}
-    }).encode()
+    body = json.dumps({"forceRefresh": True} if force_refresh else {}).encode()
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     ctx = None
     if https:
@@ -200,7 +202,7 @@ def _free_port() -> int:
 
 
 def _fetch_via_temporary_hub() -> dict:
-    """Arranca `agy --hub` en segundo plano ~0,6 s para leer la cuota con la app cerrada."""
+    """Arranca `agy --hub` en segundo plano ~2 s para leer la cuota con la app cerrada."""
     binary = _find_agy_binary()
     port = _free_port()
     csrf = f"limitbar-{uuid.uuid4().hex}"
@@ -220,14 +222,9 @@ def _fetch_via_temporary_hub() -> dict:
                 break
             time.sleep(0.25)
             try:
-                data = _call_get_user_status(port, csrf, https=False, timeout=1.5)
+                data = _call_quota_summary(port, csrf, https=False, force_refresh=False, timeout=2.0)
                 last_data = data
-                configs = (
-                    (data.get("userStatus") or {})
-                    .get("cascadeModelConfigData", {})
-                    .get("clientModelConfigs")
-                )
-                if configs:
+                if (data.get("response") or {}).get("groups"):
                     return data
             except (urllib.error.URLError, TimeoutError, OSError, ValueError):
                 continue
@@ -244,17 +241,15 @@ def _fetch_via_temporary_hub() -> dict:
 
 def fetch_status() -> dict:
     for port, csrf, https in _running_endpoints():
-        try:
-            data = _call_get_user_status(port, csrf, https=https, timeout=2.0)
-            configs = (
-                (data.get("userStatus") or {})
-                .get("cascadeModelConfigData", {})
-                .get("clientModelConfigs")
-            )
-            if configs:
-                return data
-        except Exception:  # noqa: BLE001 — probamos el siguiente o levantamos hub temporal
-            continue
+        for refresh in (True, False):
+            try:
+                data = _call_quota_summary(
+                    port, csrf, https=https, force_refresh=refresh, timeout=3.0
+                )
+                if (data.get("response") or {}).get("groups"):
+                    return data
+            except Exception:  # noqa: BLE001 — probamos sin refresh, siguiente puerto o hub temporal
+                continue
     return _fetch_via_temporary_hub()
 
 

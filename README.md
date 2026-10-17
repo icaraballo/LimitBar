@@ -89,9 +89,9 @@ proveedor y ventana del JSON, así que los nuevos aparecen solos.
   lectura; nunca lo refresca) y consulta el endpoint de uso, que no es oficial.
 - `collector/providers/gemini.py`: abre `gemini.google.com/usage` en un Chrome invisible con el
   perfil de LimitBar y lee el texto de la página (sesión de 5 h y semanal).
-- `collector/providers/antigravity.py`: pregunta la cuota por modelo al servidor local de
-  Antigravity; si está cerrado, arranca un momento su propio `agy --hub`, que es quien renueva
-  su sesión.
+- `collector/providers/antigravity.py`: pregunta la cuota por grupo (Gemini 5 h/semanal, Claude
+  5 h/semanal y Argon 4 semanal) al servidor local de Antigravity; si está cerrado, arranca un
+  momento su propio `agy --hub`, que es quien renueva su sesión.
 - `collector/usage_tokens.py`: tokens por modelo de los registros locales de Claude Code y de
   Antigravity, valorados con `collector/prices.py` («coste equivalente»).
 

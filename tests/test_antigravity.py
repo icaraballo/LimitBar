@@ -12,36 +12,66 @@ NOW = datetime(2026, 10, 17, 16, 0, tzinfo=timezone.utc)
 
 
 class AntigravityParseTest(unittest.TestCase):
-    """Con la respuesta real de GetUserStatus (17-10-2026), sin datos de la cuenta."""
+    """Con la respuesta real de RetrieveUserQuotaSummary (17-10-2026)."""
 
-    def test_one_window_per_family_in_order(self):
-        windows = parse_usage(json.loads(FIXTURE.read_text()), now=NOW)
-        self.assertEqual([w.id for w in windows],
-                         ["flash_3_8", "argon_4", "opus_5_5", "sonnet_5_5", "gpt_oss_120b"])
+    def test_groups_and_order_5h_before_weekly(self):
+        windows = parse_usage(json.loads(FIXTURE.read_text()))
+        self.assertEqual(
+            [(w.id, w.label) for w in windows],
+            [
+                ("gemini_5h", "Gemini · 5 h"),
+                ("gemini_7d", "Gemini · semanal"),
+                ("claude_5h", "Claude · 5 h"),
+                ("claude_7d", "Claude · semanal"),
+                ("argon_4", "Argon 4 · semanal"),
+            ],
+        )
         self.assertEqual((windows[0].used_pct, windows[0].resets_at), (6.6, "2026-10-17T17:59:34Z"))
-        self.assertEqual(windows[1].used_pct, 70.1)
-        self.assertEqual(windows[2].used_pct, 0.0)
+        self.assertEqual((windows[1].used_pct, windows[1].resets_at), (1.9, "2026-10-24T12:59:34Z"))
+        self.assertEqual((windows[4].used_pct, windows[4].resets_at), (70.1, "2026-10-24T12:01:12Z"))
 
-    def test_period_comes_from_reset_time(self):
-        windows = parse_usage(json.loads(FIXTURE.read_text()), now=NOW)
-        self.assertEqual(windows[0].label, "Flash 3.8 · 5 h")
-        self.assertEqual(windows[1].label, "Argon 4 · semanal")
+    def test_unused_bucket_has_no_reset_until_started(self):
+        windows = {w.id: w for w in parse_usage(json.loads(FIXTURE.read_text()))}
+        self.assertEqual((windows["claude_5h"].used_pct, windows["claude_5h"].resets_at), (0.0, None))
+        self.assertEqual((windows["claude_7d"].used_pct, windows["claude_7d"].resets_at), (0.0, None))
+
+        # Al empezar a usar el grupo, aparecen tanto el reset de 5 h como el semanal:
+        data = json.loads(FIXTURE.read_text())
+        for b in data["response"]["groups"][1]["buckets"]:
+            b["remainingFraction"] = 0.9497072 if b["window"] == "5h" else 0.9748536
+        started = {w.id: w for w in parse_usage(data)}
+        self.assertEqual(
+            (started["claude_5h"].used_pct, started["claude_5h"].resets_at),
+            (5.0, "2026-10-17T21:51:12Z"),
+        )
+        self.assertEqual(
+            (started["claude_7d"].used_pct, started["claude_7d"].resets_at),
+            (2.5, "2026-10-24T16:51:12Z"),
+        )
 
     def test_omitted_remaining_fraction_means_100_pct_used(self):
-        data = {"userStatus": {"cascadeModelConfigData": {"clientModelConfigs": [
-            {"label": "Gemini 4 Argon (High)", "quotaInfo": {"resetTime": "2026-10-24T12:00:00Z"}},
-        ]}}}
-        windows = parse_usage(data, now=NOW)
-        self.assertEqual((len(windows), windows[0].used_pct), (1, 100.0))
+        data = {"response": {"groups": [{
+            "displayName": "Gemini 4 Argon",
+            "buckets": [{"bucketId": "gemini-argon-wtu-weekly", "window": "weekly",
+                         "resetTime": "2026-10-24T12:00:00Z"}],
+        }]}}
+        windows = parse_usage(data)
+        self.assertEqual((len(windows), windows[0].used_pct, windows[0].resets_at),
+                         (1, 100.0, "2026-10-24T12:00:00Z"))
 
-    def test_unknown_model_family_is_preserved(self):
+    def test_unknown_bucket_is_preserved(self):
         data = json.loads(FIXTURE.read_text())
-        data["userStatus"]["cascadeModelConfigData"]["clientModelConfigs"].append({
-            "label": "Gemini 5 Ultra (High)",
-            "quotaInfo": {"remainingFraction": 0.25, "resetTime": "2026-10-17T20:00:00Z"},
+        data["response"]["groups"].append({
+            "displayName": "Gemini 5 Ultra",
+            "buckets": [{
+                "bucketId": "gemini-ultra-weekly",
+                "window": "weekly",
+                "remainingFraction": 0.25,
+                "resetTime": "2026-10-24T20:00:00Z",
+            }],
         })
-        ultra = [w for w in parse_usage(data, now=NOW) if w.id == "gemini_5_ultra"][0]
-        self.assertEqual((ultra.label, ultra.used_pct), ("Gemini 5 Ultra · 5 h", 75.0))
+        ultra = [w for w in parse_usage(data) if w.id == "gemini_ultra_weekly"][0]
+        self.assertEqual((ultra.label, ultra.used_pct), ("Gemini 5 Ultra · semanal", 75.0))
 
 
 class AntigravityTokensTest(unittest.TestCase):

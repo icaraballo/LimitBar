@@ -24,7 +24,7 @@ enum Format {
         f.locale = Locale(identifier: "es_ES")
         if cal.isDate(date, inSameDayAs: now) {
             f.dateFormat = "HH:mm"
-        } else if date.timeIntervalSince(now) < 6 * 86_400 {
+        } else if date.timeIntervalSince(now) <= 7 * 86_400 {
             f.dateFormat = "EEE HH:mm"
         } else {
             f.dateFormat = "d MMM"

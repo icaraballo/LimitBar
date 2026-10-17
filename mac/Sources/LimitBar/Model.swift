@@ -24,6 +24,11 @@ struct Provider: Decodable, Identifiable {
          "grok": "Grok", "deepseek": "DeepSeek", "muse": "Muse"][id] ?? id.capitalized
     }
 
+    /// App de escritorio de cada proveedor (comprobado con `osascript -e 'id of app "…"'`).
+    /// Sin entrada o sin app instalada, la pestaña usa la inicial con su color.
+    static let bundleIDs = ["claude": "com.anthropic.claudefordesktop", "gemini": "com.google.GeminiMacOS",
+                            "antigravity": "com.google.antigravity"]
+
     /// Pestañas fijas: salen aunque el recolector aún no traiga ese proveedor.
     static let tabs = ["claude", "gemini", "antigravity"]
 }

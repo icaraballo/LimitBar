@@ -1,15 +1,20 @@
-"""Cuenta tokens y coste equivalente del uso de Claude Code, leyendo sus logs locales.
+"""Cuenta tokens y coste equivalente de Claude Code y Antigravity, leyendo sus logs locales.
 
 Claude Code guarda un JSONL por sesión en ~/.claude/projects/*/. Cada mensaje del asistente trae
 `message.model` y `message.usage` (entrada, salida, creación y lectura de caché). Sumamos por
 modelo en una ventana de días y le ponemos precio con la tabla de prices.py.
 
-Es local: no toca credenciales ni red. Solo mide Claude Code (no los chats ni Cowork de la web).
+Antigravity (IDE y CLI) deja un transcript.jsonl por conversación en ~/.gemini/antigravity*/brain/:
+cada respuesta trae sus tokens, pero no el modelo; el modelo sale del aviso «Model Selection» que
+Antigravity mete en los mensajes del usuario al elegirlo o cambiarlo.
+
+Es local: no toca credenciales ni red. No mide los chats ni Cowork de la web de Claude.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -17,6 +22,14 @@ from collector import prices
 from collector.schema import Cost, ModelCost
 
 LOGS = Path.home() / ".claude" / "projects"
+ANTIGRAVITY_LOGS = (
+    Path.home() / ".gemini" / "antigravity" / "brain",
+    Path.home() / ".gemini" / "antigravity-cli" / "brain",
+)
+UNKNOWN_MODEL = "desconocido"   # sin precio: mejor «sin precio» que atribuir a otro modelo
+# «…`Model Selection` from None to Gemini 3.8 Flash (High). No need to comment…»: el nombre lleva
+# puntos, así que se corta en el «. No need» que cierra el aviso, no en el primer punto.
+_MODEL_CHANGE_RE = re.compile(r"Model Selection` from .+? to (.+?)\.\s+No need")
 
 
 def _accumulate(records: dict, model: str, u: dict) -> None:
@@ -73,8 +86,61 @@ def scan(window_days: int = 7, now: datetime | None = None, root: Path = LOGS) -
     return records
 
 
-def read_cost(window_days: int = 7, now: datetime | None = None, root: Path = LOGS) -> Cost:
-    records = scan(window_days, now, root)
+def scan_antigravity(
+    window_days: int = 7,
+    now: datetime | None = None,
+    roots: tuple[Path, ...] = ANTIGRAVITY_LOGS,
+) -> dict:
+    """Suma de tokens por modelo en los logs locales de Antigravity (IDE y CLI)."""
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(days=window_days)
+    records: dict[str, dict] = {}
+    seen: set[str] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.glob("*/.system_generated/logs/transcript.jsonl"):
+            conv_id = path.parent.parent.parent.name
+            model = UNKNOWN_MODEL   # hasta el aviso de «Model Selection» (suele ser el 1.er mensaje)
+            try:
+                with path.open() as f:
+                    for line in f:
+                        try:
+                            d = json.loads(line)
+                        except ValueError:
+                            continue
+                        step_type = d.get("type")
+                        if step_type == "USER_INPUT":
+                            matches = _MODEL_CHANGE_RE.findall(d.get("content") or "")
+                            if matches:
+                                model = prices.normalize(matches[-1])
+                            continue
+                        if step_type != "PLANNER_RESPONSE":
+                            continue
+                        ts = d.get("created_at")
+                        if ts:
+                            when = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                            if when < since:
+                                continue
+                        step_idx = d.get("step_index")
+                        dedup_key = f"{conv_id}:{step_idx}"
+                        if step_idx is not None and dedup_key in seen:
+                            continue
+                        if step_idx is not None:
+                            seen.add(dedup_key)
+                        norm_model = prices.normalize(model)
+                        acc = records.setdefault(
+                            norm_model, {"input": 0, "output": 0, "cw5m": 0, "cw1h": 0, "read": 0}
+                        )
+                        acc["input"] += d.get("input_tokens", 0) or 0
+                        acc["output"] += d.get("output_tokens", 0) or 0
+                        acc["read"] += d.get("cache_read_tokens", 0) or 0
+            except OSError:
+                continue
+    return records
+
+
+def _build_cost(window_days: int, records: dict) -> Cost:
     models = []
     for model, a in records.items():
         usd = prices.cost_usd(model, a["input"], a["output"], a["cw5m"], a["cw1h"], a["read"])
@@ -87,6 +153,18 @@ def read_cost(window_days: int = 7, now: datetime | None = None, root: Path = LO
             cache_read=a["read"],
             cost_usd=round(usd, 2) if usd is not None else None,
         ))
-    models.sort(key=lambda m: m.cost_usd or 0, reverse=True)
+    models.sort(key=lambda m: (m.cost_usd or 0, m.input + m.output + m.cache_read), reverse=True)
     priced = round(sum(m.cost_usd for m in models if m.cost_usd is not None), 2)
     return Cost(window_days=window_days, priced_usd=priced, models=models, prices_revised=prices.REVISED)
+
+
+def read_cost(window_days: int = 7, now: datetime | None = None, root: Path = LOGS) -> Cost:
+    return _build_cost(window_days, scan(window_days, now, root))
+
+
+def read_antigravity_cost(
+    window_days: int = 7,
+    now: datetime | None = None,
+    roots: tuple[Path, ...] = ANTIGRAVITY_LOGS,
+) -> Cost:
+    return _build_cost(window_days, scan_antigravity(window_days, now, roots))

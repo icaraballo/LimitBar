@@ -62,6 +62,15 @@ class RenderTest(unittest.TestCase):
         self.assertIn("20 $", out)
         self.assertIn("Semanal por producto", out)
 
+    def test_credits_without_money_or_pct(self):
+        d = data()
+        d["providers"][0]["windows"].append({
+            "id": "ai_credits", "label": "Créditos IA", "used_pct": None, "resets_at": None,
+            "kind": "credit", "used": None, "limit": 150.0, "currency": "créditos"})
+        out = render(d, NOW)
+        self.assertIn("quedan 150 créditos", out)
+        self.assertNotIn("150 $", out)
+
     def test_no_data(self):
         self.assertTrue(render(None, NOW).startswith("LB ?"))
 

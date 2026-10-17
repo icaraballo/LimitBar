@@ -1,0 +1,138 @@
+{
+  "userStatus": {
+    "cascadeModelConfigData": {
+      "clientModelConfigs": [
+        {
+          "label": "Gemini 4 Argon (High)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M417"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.29892293,
+            "resetTime": "2026-10-24T12:01:12Z"
+          }
+        },
+        {
+          "label": "Gemini 4 Argon (Low)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M419"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.29892293,
+            "resetTime": "2026-10-24T12:01:12Z"
+          }
+        },
+        {
+          "label": "Gemini 3.8 Flash (Low)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M320"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.9342022,
+            "resetTime": "2026-10-17T17:59:34Z"
+          }
+        },
+        {
+          "label": "Claude Opus 5.5 (Low)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M400"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        },
+        {
+          "label": "Claude Opus 5.5 (Medium)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M401"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        },
+        {
+          "label": "Claude Opus 5.5 (High)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M402"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        },
+        {
+          "label": "Claude Sonnet 5.5 (High)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M405"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        },
+        {
+          "label": "Gemini 4 Argon (Medium)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M418"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.29892293,
+            "resetTime": "2026-10-24T12:01:12Z"
+          }
+        },
+        {
+          "label": "Gemini 3.8 Flash (High)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M318"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.9342022,
+            "resetTime": "2026-10-17T17:59:34Z"
+          }
+        },
+        {
+          "label": "Gemini 3.8 Flash (Medium)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M319"
+          },
+          "quotaInfo": {
+            "remainingFraction": 0.9342022,
+            "resetTime": "2026-10-17T17:59:34Z"
+          }
+        },
+        {
+          "label": "Claude Sonnet 5.5 (Low)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M403"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        },
+        {
+          "label": "Claude Sonnet 5.5 (Medium)",
+          "modelOrAlias": {
+            "model": "MODEL_PLACEHOLDER_M404"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        },
+        {
+          "label": "GPT-OSS 120B (Medium)",
+          "modelOrAlias": {
+            "model": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM"
+          },
+          "quotaInfo": {
+            "remainingFraction": 1,
+            "resetTime": "2026-10-17T21:41:07Z"
+          }
+        }
+      ]
+    }
+  }
+}

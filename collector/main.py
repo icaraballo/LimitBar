@@ -13,12 +13,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from collector.providers.antigravity import AntigravityProvider
 from collector.providers.base import Provider, ProviderError
 from collector.providers.claude import ClaudeProvider
+from collector.providers.gemini import GeminiProvider
 from collector.schema import ProviderResult, Snapshot, utc_now_iso
 from collector.upload import UploadError, load_config, upload
 
-PROVIDERS: list[Provider] = [ClaudeProvider()]
+PROVIDERS: list[Provider] = [ClaudeProvider(), GeminiProvider(), AntigravityProvider()]
 OUTPUT = Path(__file__).resolve().parent.parent / "data" / "latest.json"
 
 
@@ -56,16 +58,19 @@ def render(snapshot: Snapshot) -> str:
             continue
         lines.append(f"  {p.id}")
         for w in p.windows:
+            if w.kind == "credit":
+                left = (w.limit or 0) - (w.used or 0)
+                if w.currency == "USD":
+                    lines.append(f"    {w.label:<18} quedan {left:g} de {w.limit:g} USD"
+                                 f"  · caduca {_local(w.resets_at)}")
+                else:   # solo se sabe cuántos quedan (créditos de Gemini)
+                    lines.append(f"    {w.label:<18} quedan {left:g} {w.currency}")
+                continue
             if w.used_pct is None:
                 lines.append(f"    {w.label:<18}  sin dato")
                 continue
             filled = round(w.used_pct / 10)
             bar = "█" * filled + "░" * (10 - filled)
-            if w.kind == "credit":
-                left = (w.limit or 0) - (w.used or 0)
-                lines.append(f"    {w.label:<18} {bar} quedan {left:g} de {w.limit:g} {w.currency}"
-                             f"  · caduca {_local(w.resets_at)}")
-                continue
             lines.append(f"    {w.label:<18} {bar} {w.used_pct:5.1f} %  · reset {_local(w.resets_at)}")
         if p.breakdown:
             lines.append("    Semanal por producto: "

@@ -33,7 +33,11 @@ enum Format {
     }
 
     static func money(_ value: Double) -> String {
-        value.rounded() == value ? "\(Int(value)) $" : String(format: "%.2f $", value)
+        "\(number(value)) $"
+    }
+
+    static func number(_ value: Double) -> String {
+        value.rounded() == value ? "\(Int(value))" : String(format: "%.2f", value)
     }
 
     static func color(_ pct: Double) -> Color {

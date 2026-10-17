@@ -113,7 +113,11 @@ struct WindowRow: View {
 
     private var value: String {
         if window.isCredit, let limit = window.limit {
-            return "quedan \(Format.money(limit - (window.used ?? 0))) de \(Format.money(limit))"
+            let left = limit - (window.used ?? 0)
+            guard window.currency == "USD" else {   // solo se sabe cuántos quedan (Gemini)
+                return "quedan \(Format.number(left)) \(window.currency ?? "")"
+            }
+            return "quedan \(Format.money(left)) de \(Format.money(limit))"
         }
         return window.usedPct.map { "\(Int($0.rounded())) %" } ?? "sin dato"
     }

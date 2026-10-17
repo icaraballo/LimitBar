@@ -29,6 +29,11 @@ PRICES: dict[str, tuple[float, float, float]] = {
     "claude-sonnet-4-6": (3.0, 15.0, 0.30),
     "claude-haiku-5-5": (0.10, 0.50, 0.02),
     "claude-haiku-4-5": (1.0, 5.0, 0.10),
+    # Gemini (modelos de Antigravity), fuente: ai.google.dev/gemini-api/docs/pricing, revisado
+    # 2026-10-17. Son precios de lanzamiento: Argon pasa a (4, 20, 0.20) el 2026-12-01 y Flash 3.8
+    # a (1.50, 7.50, 0.15) el 2027-01-01. La escritura de caché de Gemini es implícita y no se cobra aparte.
+    "gemini-4-argon":   (2.0, 10.0, 0.10),
+    "gemini-3.8-flash": (0.75, 3.75, 0.075),
 }
 
 # Nombre bonito para enseñar. Si un modelo no está, se usa su id tal cual.
@@ -38,13 +43,23 @@ LABELS = {
     "claude-opus-4-7": "Opus 4.7", "claude-opus-4-6": "Opus 4.6",
     "claude-sonnet-5-5": "Sonnet 5.5", "claude-sonnet-5": "Sonnet 5", "claude-sonnet-4-6": "Sonnet 4.6",
     "claude-haiku-5-5": "Haiku 5.5", "claude-haiku-4-5": "Haiku 4.5",
+    "gemini-4-argon": "Argon 4", "gemini-3.8-flash": "Flash 3.8",
 }
 
 
 def normalize(model: str) -> str:
-    """Quita el sufijo de fecha (claude-haiku-4-5-20251001 → claude-haiku-4-5)."""
+    """Quita el sufijo de fecha o nivel de esfuerzo (Low/Medium/High) y pasa a id canónico."""
     import re
-    return re.sub(r"-\d{8}$", "", model)
+    m = model.strip()
+    m = re.sub(r"\s*\((?:Low|Medium|High|Extra Low)\)$", "", m, flags=re.IGNORECASE)
+    m = m.lower().replace(" ", "-")
+    m = re.sub(r"-(?:low|medium|high|extra-low)$", "", m)
+    m = re.sub(r"-\d{8}$", "", m)
+    if m.startswith("claude-opus-5.5"):
+        return "claude-opus-5-5"
+    if m.startswith("claude-sonnet-5.5"):
+        return "claude-sonnet-5-5"
+    return m
 
 
 def label(model: str) -> str:

@@ -1,12 +1,18 @@
 # LimitBar
 
-Monitor de los límites de uso de mis IAs (Claude, y más adelante Gemini, Antigravity, ChatGPT…).
-Un recolector en el Mac lee cuánto llevo gastado de cada una y lo guarda en un formato JSON
-propio; después irá a Supabase y a un widget de Android.
+Monitor de los límites de uso de mis IAs: Claude, Gemini y Antigravity (y más adelante ChatGPT…).
+Un recolector en el Mac lee cuánto llevo gastado de cada una, lo guarda en un formato JSON propio
+y lo sube a Supabase; una app en la barra de menú del Mac lo enseña. Después, widget de Android.
 
 ## Ejecutar
 
-Requiere Python 3.10+ y haber iniciado sesión en Claude Code. Sin dependencias externas.
+Requiere Python 3.10+ y sin dependencias externas. Cada IA necesita su sesión:
+
+- **Claude**: haber iniciado sesión en Claude Code.
+- **Gemini**: Google Chrome y, la primera vez (y cuando caduque la cookie de Google, cada varias
+  semanas), `python3 -m collector.providers.gemini --login`: abre un Chrome con un perfil propio
+  de LimitBar (`data/chrome-gemini/`, fuera de git) para iniciar sesión; después se cierra con ⌘Q.
+- **Antigravity**: tenerlo instalado con sesión iniciada (`agy`). No hace falta que esté abierto.
 
 ```sh
 python3 -m collector.main              # imprime el uso, escribe data/latest.json y sube a Supabase
@@ -81,8 +87,15 @@ proveedor y ventana del JSON, así que los nuevos aparecen solos.
   Si uno falla, sale con `status: "error"` y los demás siguen.
 - `collector/providers/claude.py`: lee el token OAuth de Claude Code (solo en memoria, solo
   lectura; nunca lo refresca) y consulta el endpoint de uso, que no es oficial.
+- `collector/providers/gemini.py`: abre `gemini.google.com/usage` en un Chrome invisible con el
+  perfil de LimitBar y lee el texto de la página (sesión de 5 h y semanal).
+- `collector/providers/antigravity.py`: pregunta la cuota por modelo al servidor local de
+  Antigravity; si está cerrado, arranca un momento su propio `agy --hub`, que es quien renueva
+  su sesión.
+- `collector/usage_tokens.py`: tokens por modelo de los registros locales de Claude Code y de
+  Antigravity, valorados con `collector/prices.py` («coste equivalente»).
 
 ## Estado
 
-v0: Claude (ventanas de 5 h, semanal y semanales por modelo), subida a Supabase y ejecución
-automática con launchd. Falta: widget y el resto de proveedores.
+v0: Claude, Gemini y Antigravity en el recolector, subida a Supabase, ejecución automática con
+launchd y app del Mac. Falta: widget de Android y el resto de proveedores.

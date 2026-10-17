@@ -36,6 +36,17 @@ Tablas: `latest_status` (una fila por proveedor; si un proveedor falla se conser
 lectura buena) y `usage_history` (una fila por ventana y ronda). Las dos tienen RLS sin
 políticas: con la clave pública no se puede leer ni escribir nada.
 
+## Ejecución automática
+
+```sh
+scripts/launchd.sh install    # cada 20 min (y al iniciar sesión); lanza una ronda ya
+scripts/launchd.sh status     # ¿está cargado? + últimas líneas del log
+scripts/launchd.sh uninstall
+```
+
+Log en `~/Library/Logs/LimitBar/collector.log`. Si el Mac duerme, la ronda pendiente se hace
+al despertar.
+
 ## Cómo funciona
 
 - `collector/schema.py`: el formato JSON v0 (el contrato con el móvil).
@@ -46,5 +57,5 @@ políticas: con la clave pública no se puede leer ni escribir nada.
 
 ## Estado
 
-v0: Claude (ventanas de 5 h, semanal y semanales por modelo) y subida a Supabase. Falta:
-ejecución automática, widget y el resto de proveedores.
+v0: Claude (ventanas de 5 h, semanal y semanales por modelo), subida a Supabase y ejecución
+automática con launchd. Falta: widget y el resto de proveedores.

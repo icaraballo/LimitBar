@@ -1,7 +1,54 @@
 {
-  "five_hour": {"utilization": 42.0, "resets_at": "2026-10-17T19:00:00.123456+00:00"},
-  "seven_day": {"utilization": 18.37, "resets_at": "2026-10-21T07:00:00+00:00"},
+  "five_hour": {
+    "utilization": 42.0,
+    "resets_at": "2026-10-17T19:00:00.123456+00:00"
+  },
+  "seven_day": {
+    "utilization": 18.37,
+    "resets_at": "2026-10-21T07:00:00+00:00"
+  },
   "seven_day_opus": null,
-  "seven_day_sonnet": {"utilization": 5.0, "resets_at": "2026-10-21T07:00:00+00:00"},
-  "extra_usage": {"is_enabled": false}
+  "seven_day_sonnet": {
+    "utilization": 5.0,
+    "resets_at": "2026-10-21T07:00:00+00:00"
+  },
+  "extra_usage": {
+    "is_enabled": false,
+    "utilization": null,
+    "user_disabled": true
+  },
+  "tangelo": null,
+  "iguana_necktie": {
+    "utilization": 25.0,
+    "resets_at": "2026-11-05T07:59:00+00:00",
+    "limit_dollars": 100,
+    "used_dollars": 25.0,
+    "remaining_dollars": 75.0,
+    "locked_reason": null
+  },
+  "seven_day_breakdown": {
+    "as_of": "2026-10-17T14:38:21Z",
+    "rows": [
+      {
+        "key": "claude_code",
+        "display_name": "Claude Code",
+        "percent": 52
+      },
+      {
+        "key": "chat",
+        "display_name": "Chats",
+        "percent": 13
+      },
+      {
+        "key": "cowork",
+        "display_name": "Cowork",
+        "percent": 35
+      },
+      {
+        "key": "other",
+        "display_name": "Other",
+        "percent": 0
+      }
+    ]
+  }
 }

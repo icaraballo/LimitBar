@@ -61,6 +61,7 @@ def build_rows(snapshot: Snapshot) -> tuple[list[dict], list[dict]]:
         }
         if p.status == "ok":
             row["windows"] = [w.__dict__ for w in p.windows]
+            row["breakdown"] = [s.__dict__ for s in p.breakdown]
             row["updated_at"] = snapshot.collected_at
             history += [{
                 "collected_at": snapshot.collected_at,

@@ -50,6 +50,18 @@ class RenderTest(unittest.TestCase):
         self.assertTrue(out.startswith("LB ✗"))
         self.assertIn("✗ Sin sesión", out)
 
+    def test_credit_is_not_the_title(self):
+        d = data()
+        d["providers"][0]["windows"].append({
+            "id": "cloud_credits", "label": "Créditos nube", "used_pct": 80.0,
+            "resets_at": "2026-11-05T07:59:00Z", "kind": "credit", "used": 80.0, "limit": 100.0,
+            "currency": "USD"})
+        d["providers"][0]["breakdown"] = [{"id": "chat", "label": "Chats", "pct": 13.0}]
+        out = render(d, NOW)
+        self.assertTrue(out.startswith("45%"))
+        self.assertIn("20 $", out)
+        self.assertIn("Semanal por producto", out)
+
     def test_no_data(self):
         self.assertTrue(render(None, NOW).startswith("LB ?"))
 

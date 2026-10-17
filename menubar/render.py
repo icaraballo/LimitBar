@@ -85,11 +85,11 @@ def render(data: dict | None, now: datetime | None = None) -> str:
     if data is None:
         return "\n".join(["LB ?", "---", "Sin datos todavía", refresh])
 
-    # Título: la ventana más gastada de todas, que es la que manda.
+    # Título: la ventana más gastada de todas, que es la que manda (los créditos no son límite).
     worst = None
     for p in data.get("providers", []):
         for w in p.get("windows", []) if p.get("status") == "ok" else []:
-            if w.get("used_pct") is not None and (worst is None or w["used_pct"] > worst["used_pct"]):
+            if w.get("kind", "limit") == "limit" and w.get("used_pct") is not None and (worst is None or w["used_pct"] > worst["used_pct"]):
                 worst = w
     collected = _parse(data.get("collected_at"))
     age = (now - collected).total_seconds() / 60 if collected else None
@@ -120,10 +120,21 @@ def render(data: dict | None, now: datetime | None = None) -> str:
                 continue
             color = _color(pct)
             extra = f" color={color}" if color else ""
+            if w.get("kind") == "credit":
+                left = (w.get("limit") or 0) - (w.get("used") or 0)
+                lines.append(f"{w['label']:<16} {_bar(pct)} {left:g} $ | {MONO}{extra}")
+                lines.append(f"{'':<16} de {w.get('limit') or 0:g} $ · caduca "
+                             f"{_reset_label(w.get('resets_at'), now).removeprefix('reset ')}"
+                             f" | font=Menlo size=11 color=#888888")
+                continue
             lines.append(f"{w['label']:<16} {_bar(pct)} {pct:3.0f}% | {MONO}{extra}")
             reset = _reset_label(w.get("resets_at"), now)
             if reset:
                 lines.append(f"{'':<16} {reset} | font=Menlo size=11 color=#888888")
+        if p.get("breakdown"):
+            lines.append("Semanal por producto | size=11 color=#888888")
+            for s in p["breakdown"]:
+                lines.append(f"{s['label']:<16} {_bar(s['pct'])} {s['pct']:3.0f}% | {MONO} color=#888888")
         lines.append("---")
 
     if age is None:

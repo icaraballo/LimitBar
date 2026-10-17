@@ -10,12 +10,29 @@ SCHEMA_VERSION = 0
 
 @dataclass
 class Window:
-    """Una ventana de límite: cuánto llevo usado y cuándo se resetea."""
+    """Una ventana de límite: cuánto llevo usado y cuándo se resetea.
+
+    `kind="credit"` es un saldo en dinero (p. ej. los créditos de la nube de Claude): además del
+    % trae lo gastado y el tope, y `resets_at` es cuándo caduca. No cuenta como límite del plan.
+    """
 
     id: str                      # "5h", "7d", "7d_opus"…
     label: str                   # texto para enseñar
     used_pct: float | None       # 0–100
     resets_at: str | None        # ISO 8601 en UTC
+    kind: str = "limit"          # "limit" | "credit"
+    used: float | None = None    # solo créditos: gastado
+    limit: float | None = None   # solo créditos: tope
+    currency: str | None = None  # solo créditos: "USD"…
+
+
+@dataclass
+class Share:
+    """Una parte del uso (p. ej. cuánto del semanal se fue en Claude Code)."""
+
+    id: str
+    label: str
+    pct: float
 
 
 @dataclass
@@ -24,6 +41,7 @@ class ProviderResult:
     status: str = "ok"           # "ok" | "error"
     error: str | None = None
     windows: list[Window] = field(default_factory=list)
+    breakdown: list[Share] = field(default_factory=list)   # reparto del uso, si el proveedor lo da
 
     @classmethod
     def failed(cls, provider_id: str, message: str) -> "ProviderResult":

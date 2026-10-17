@@ -6,7 +6,9 @@ De dónde sale el dato (no oficial, puede cambiar):
   `~/.claude/.credentials.json`.
 - GET https://api.anthropic.com/api/oauth/usage con `Authorization: Bearer <token>` y
   `anthropic-beta: oauth-2025-04-20` devuelve `five_hour`, `seven_day`… cada una con
-  `utilization` (0–100) y `resets_at`.
+  `utilization` (0–100) y `resets_at`. Muchas claves son nombres en clave que van a `null`
+  si la cuenta no tiene ese cupo; las que traen `limit_dollars` son créditos en dinero.
+  `seven_day_breakdown.rows` reparte el semanal por producto (Claude Code, chats, Cowork…).
 
 Reglas: el token vive solo en memoria y es de solo lectura. Nunca se refresca ni se reescribe
 (eso podría cerrar la sesión de Claude Code).
@@ -23,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from collector.providers.base import Provider, ProviderError
-from collector.schema import ProviderResult, Window
+from collector.schema import ProviderResult, Share, Window
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 BETA_HEADER = "oauth-2025-04-20"
@@ -40,6 +42,15 @@ WINDOWS = [
 ]
 # Las dos principales salen siempre (aunque vengan vacías); las de modelo, solo si hay dato.
 REQUIRED = {"five_hour", "seven_day"}
+# Nombres en clave ya identificados (comparando con claude.ai → Ajustes → Uso).
+CODENAMES = {
+    "iguana_necktie": ("cloud_credits", "Créditos nube"),   # «Créditos de sesión en la nube»
+}
+BREAKDOWN_LABELS = {"claude_code": "Claude Code", "chat": "Chats", "cowork": "Cowork",
+                    "other": "Otros"}
+# Ventanas que no conocemos (p. ej. `seven_day_fable` si un modelo pasa a tener cupo propio):
+# se reconocen por el prefijo y salen detrás de las conocidas, en vez de perderse.
+PREFIXES = [("five_hour_", "5h_", "Sesión (5 h)"), ("seven_day_", "7d_", "Semanal")]
 
 
 def _read_credentials_blob() -> str:
@@ -102,22 +113,56 @@ def _to_utc_iso(value: str | None) -> str | None:
     return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _unknown_windows(data: dict) -> list[tuple[str, str, str]]:
+    known = {key for key, _, _ in WINDOWS}
+    out = []
+    for key, raw in data.items():
+        if key in known or not isinstance(raw, dict) or raw.get("utilization") is None:
+            continue
+        if key in CODENAMES:
+            out.append((key, *CODENAMES[key]))
+            continue
+        for prefix, id_prefix, label in PREFIXES:
+            if key.startswith(prefix):
+                name = key[len(prefix):]
+                out.append((key, id_prefix + name, f"{label} · {name.replace('_', ' ').capitalize()}"))
+                break
+        else:
+            out.append((key, key, key.replace("_", " ").capitalize()))
+    return out
+
+
 def parse_usage(data: dict) -> list[Window]:
     windows = []
-    for key, wid, label in WINDOWS:
+    for key, wid, label in WINDOWS + _unknown_windows(data):
         raw = data.get(key)
         if not isinstance(raw, dict):
             if key in REQUIRED:
                 windows.append(Window(wid, label, None, None))
             continue
         pct = raw.get("utilization")
-        windows.append(Window(
+        window = Window(
             id=wid,
             label=label,
             used_pct=round(float(pct), 1) if pct is not None else None,
             resets_at=_to_utc_iso(raw.get("resets_at")),
-        ))
+        )
+        if raw.get("limit_dollars") is not None:
+            window.kind = "credit"
+            window.used = float(raw.get("used_dollars") or 0)
+            window.limit = float(raw["limit_dollars"])
+            window.currency = "USD"
+        windows.append(window)
     return windows
+
+
+def parse_breakdown(data: dict) -> list[Share]:
+    rows = (data.get("seven_day_breakdown") or {}).get("rows") or []
+    return [Share(
+        id=r["key"],
+        label=BREAKDOWN_LABELS.get(r["key"], r.get("display_name") or r["key"]),
+        pct=float(r.get("percent") or 0),
+    ) for r in rows if isinstance(r, dict) and r.get("key")]
 
 
 class ClaudeProvider(Provider):
@@ -125,4 +170,5 @@ class ClaudeProvider(Provider):
 
     def fetch(self) -> ProviderResult:
         token = read_access_token()
-        return ProviderResult(id=self.id, windows=parse_usage(fetch_usage(token)))
+        data = fetch_usage(token)
+        return ProviderResult(id=self.id, windows=parse_usage(data), breakdown=parse_breakdown(data))

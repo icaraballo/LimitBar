@@ -61,7 +61,15 @@ def render(snapshot: Snapshot) -> str:
                 continue
             filled = round(w.used_pct / 10)
             bar = "█" * filled + "░" * (10 - filled)
+            if w.kind == "credit":
+                left = (w.limit or 0) - (w.used or 0)
+                lines.append(f"    {w.label:<18} {bar} quedan {left:g} de {w.limit:g} {w.currency}"
+                             f"  · caduca {_local(w.resets_at)}")
+                continue
             lines.append(f"    {w.label:<18} {bar} {w.used_pct:5.1f} %  · reset {_local(w.resets_at)}")
+        if p.breakdown:
+            lines.append("    Semanal por producto: "
+                         + " · ".join(f"{s.label} {s.pct:g} %" for s in p.breakdown))
     return "\n".join(lines)
 
 
